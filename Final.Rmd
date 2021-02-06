@@ -1,0 +1,387 @@
+---
+title: "Final_Presentation"
+author: "Edward Thomas"
+date: "12/6/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r, echo=FALSE}
+get_world_data <- function (data, i) {
+  a <- data[42,]
+  if (i > 5){  # --- Meant for full data of Total Population --- #
+    drops <- c('Country.Name', 'Country.Code', 'Indicator.Name', 'Indicator.Code', 'Unnamed..95')
+  }else{
+    drops <- c('Country.Name', 'Country.Code', 'Indicator.Name', 'Indicator.Code', 'Unnamed..95', 'X1960', 'X2019', 'X2021', 'X2022', 'X2023', 'X2024', 'X2026', 'X2027', 'X2028', 'X2029', 'X2031', 'X2032', 'X2033', 'X2034', 'X2036', 'X2037', 'X2038', 'X2039', 'X2041', 'X2042', 'X2043', 'X2044', 'X2046', 'X2047', 'X2048', 'X2049')
+  }
+  b <- a[ , !(names(a) %in% drops)]
+  c <- b[complete.cases(b), ]
+  d <- identical(b, c) # Returns true, so there are no na's or incomplete values in our
+  
+  return(b)
+}
+
+# DRY Rule, redacted code
+################################################################################
+# get_time <- function (norm){
+#   x <- colnames(norm)
+#   y <- x[-c(1,2,3,4,5,64,66,67,68,69,71,72,73,74,76,77,78,79,81,82,83,84,86,87,88,89,91,92,93,94,96)]
+#   z <- c()
+#   i = 1
+#   for (element in y){
+#     a <- unlist(strsplit(element, ''))
+#     b <- a[-c(1)]
+#     c <- paste(b, collapse='')
+#     d <- strtoi(c)
+#     z[i] = d
+#     i = i+1
+#   }
+#   
+#   return(z)
+# }
+################################################################################
+
+get_all_time <- function (norm, drops){
+  x <- colnames(norm)
+  y <- x[-drops]
+  z <- c()
+  i = 1
+  for (element in y){
+    a <- unlist(strsplit(element, ''))
+    b <- a[-c(1)]
+    c <- paste(b, collapse='')
+    d <- strtoi(c)
+    z[i] = d
+    i = i+1
+  }
+  
+  return(z)
+}
+
+get_food_data <- function (data) {
+  U <- rep(1, 21477)
+  x <- colnames(data)
+  drops <- c("Area.Abbreviation", "Area.Code", "Area", "Item.Code", "Item", "Element.Code", "Element", "Unit", "latitude", "longitude")
+  y <- data[ , !(names(data) %in% drops)] #x[-c(1,2,3,4,5,6,8,9,10)]
+  i = 1
+  Food <- c()
+  for (element in unlist(data['Element'])) {
+    if (element == "Food"){
+      Food = append(Food, 1)
+    }else{
+      Food = append(Food, 0)
+    }
+    i = i+1
+  }
+  return(cbind(y, Food, U))
+}
+
+get_food_sum <- function(data, i) {
+  CFD <- get_food_data(data) 
+  food <- CFD$Food
+  drop <- c('Food', 'U')
+  x <- CFD[ , !(names(CFD) %in% drop)]
+  y <- x*food # Map('*', x, food)
+  a <- colSums(y, na.rm = TRUE)
+  b <- colSums(x, na.rm = TRUE)
+  if (i == 0){
+    return(a)
+  }else if (i == 1){
+    return(b-a)
+  }else{
+    return(b)
+  }
+}
+
+get_predictions <- function(when, model){
+  newTime = data.frame(time = when)
+  pred <- predict(model, newdata=newTime)
+  return(pred)
+}
+```
+Set Up:
+```{r}
+library(pracma)
+library(tidyr)
+library(stats)
+library(ggplot2)
+
+brt <- read.csv('data/BirthRate.csv')
+drt <- read.csv('data/DeathRate.csv')
+lxp <- read.csv('data/LifeExp.csv')
+popgr <- read.csv('data/PopulationGrowth.csv')
+totpop <- read.csv('data/TotalPopulation.csv')
+
+foodData <- read.csv('data/FAO.csv')
+
+list_of_dataFrames <- list(brt, drt, lxp, popgr, totpop)
+```
+```{r, echo=FALSE}
+## SET UP ##
+i = 1
+for (element in list_of_dataFrames) {
+  list_of_dataFrames[[i]] = get_world_data(element, i)
+  i = i+1
+}
+```
+
+<center>
+# ------------ Final ------------
+</center>
+
+## Question
+
+It's predicted that by the year 2050 we will have 10 billion people on the planet Earth. Can we feed 10 billion people? We will analyze this question by predicting food production data based on population growth and by time and see if they correlate with an answer of the amount of food the world will need to produce to feed all 10 billion people.
+
+## Synopsis 
+
+The idea behind this final presentation is a fear that I've had since I got into college and took one of my first courses, Biology, and about 2 months into the course, we were discussing the herbivore, carnivore, and omnivore section. The teacher brought up the fact that eating green is important and that if every human ate green then the earth would be able to hold 100 times more humans than it currently could. This interested me because it's easy to say, but where do the numbers back it up? This discussion eventually let into a real-world issue biologists, scientists, and population experts say will absolutely become an problematic which is, if people continue to live the way we do, by 2050 something will have to change and this will be caused by over-population for a world that can no longer feed the people that live on it. The class abruptly switched topics, but I have forever been stuck on it, because I find it mind-boggling that no one, politicians, activists, NASA(for God sake) would think to say, "Hey, this is a problem that needs to be addressed now". I was hoping this presentation would put me at ease, and get me an A.
+
+## World Population 
+
+```{r fig.align="center", echo=FALSE}
+pop_drop <- c(1,2,3,4,5,64,66,67,68,69,71,72,73,74,76,77,78,79,81,82,83,84,86,87,88,89,91,92,93,94,96)
+#total_pop_drop <- c(1,2,3,4,96)
+time <- get_all_time(brt, pop_drop)
+
+plot(time, unlist(list_of_dataFrames[5]), xlab='Time', ylab='Total Population')
+plot(time, unlist(list_of_dataFrames[4]), xlab='Time', ylab='Population Growth(%)')
+plot(time, unlist(list_of_dataFrames[3]), xlab='Time', ylab='Life Expectency(WRL Avg.)')
+plot(time, unlist(list_of_dataFrames[2]), xlab='Time', ylab='DeathRate(per 1,000 people)')
+plot(time, unlist(list_of_dataFrames[1]), xlab='Time', ylab='BirthRate(per 1,000 people)')
+```
+
+Through the research needed to get this data, along with just the casual reading of others work in similar data-explorations, I've come to find that most people use population data, not correspondingly with food, but with comparison to other countries or other information such as BirthRate, DeathRate, exc. This didn't come at a huge shock, but I found people are not concerned with the topic I have found,. I have plotted above the data in respect to time, just to give a broad analysis. 
+
+### Analysis 
+
+The complete data was broken into 5 main features that were then cumulatively compiled to represent WORLD data. This was done in python, which will be submitted as well, but to get the ```config.py``` file to work correctly, you'll have to look through the file and change some things around.
+
+From the graphs you can likely see some expected information. The Total Population is interesting because it resembles a linear/log graph quite well. The thought that population increase is now ceasing makes the data that much more believable. The next graph is population growth by percentage, and this is interesting because it's expected to decrease to what looks like a very stagnant stance, which doesn't completely add up when looking at the Total Population graph. The next graph is the Life Expectancy data and this is expected data, people all around the world are getting healthier and therefore are living longer. It looks as if people are going to be living much longer, but I see that as a bad thing, due to the problem we're looking at. 
+Remember that the data is already predicted until 2050.
+The Birth Rate and Death Rate are both very interesting and to see the data laid out is something. The death rate has definitely come down since the 60's but for the projected future it doesn't look good. The graph really looks to follow a quadratic trend and that is off putting. It's interesting to see that this is what is projected, because if deaths continue to rise, then would that mean population should follow suite and lower as well, or is the relationship independent. Or better yet, is population increase making the death rate dependent and because there'll will be more people, deaths will need to happen to keep a balance? The birth rate has gone down since the 60's, but is coming to a stop. The projected numbers are weird because, by 2050, the birth rate is down to a little over 0, so hardly anyone would be having that many kids. I wonder what it was before than, through the world wars and through older time, I bet the projected birth rate matches the birthrate from the beginning of the last millennium.
+
+
+## Food Production
+
+```{r fig.align="center", echo=FALSE}
+food <- get_food_sum(foodData, 0)
+feed <- get_food_sum(foodData, 1)
+both <- get_food_sum(foodData, 2)
+
+food_drop <- c(1,2,3,4,5,6,7,8,9,10)
+
+plot(get_all_time(foodData, food_drop), food, xlab='Time', ylab='Food(per 1000 tonnes)', main='Food for People')
+plot(get_all_time(foodData, food_drop), feed, xlab='Time', ylab='Feed(per 1000 tonnes)', main='Food for Livestock')
+plot(get_all_time(foodData, food_drop), both, xlab='Time', ylab='Food(per 1000 tonnes)', main='Food for both People and Livestock')
+```
+
+The research I found depicting food production was also discussing the consequences of growing population. In the Kaggle explanation, it talks about how agriculture is a huge topic because of the ever growing problem with climate change and population growing. How we grow the food we plan to eat will impact how many people get fed. The set contains extensive data, with well over 250,000 data points, and spans about 10 features, besides time. The data contains what is produced by a little over 200 countries and specifies what is produced and the amount (in tonnes). Each food item is categorized by a specific **Item.code** along with the actual name of the **Item**. The product is also categorized as Food or Feed, which is where my data manipulation comes in, as I broke the column up into two separate columns: a unit column of 1's, denoted U, and a food column, if the **Element** was Food then the value was given a 1, if Feed then the value was given a 0. These two columns allowed for me to take just the raw data, from 1961-2013, and dot the Food column and U column to get the sum of all the Food produced in the year. The method I used can be looked through and I did all the programming so it's not as clean as a 1-line ```dot()```, but I managed by picking apart the data and using the ```colSum()``` method to get the sums and this omitted *NA* values. There were huge chunks of missing data, but this is the most complete agricultural set for as many countries as I could find. The units are "per 1,000 tonnes"
+
+### Analysis
+
+From the data we can see right away that livestock has much more variable data and also is fed so much less. This could be the cause of the variability in the graph, because in comparison to the graph plotting food for people, we see much more stable activity. All the graphs are very linear, and the graph plotting food for both people and livestock could be considered exponential and we will run some models on it and see what looks best. 
+
+We have no way of knowing the actual relationship between people food and livestock food, so I will separate the data and only do my calculations on this subset of the complete dataset. Hopefully this doesn't effect too much.
+
+
+## Modeling
+
+```{r fig.align="center"}
+y <- unlist(list_of_dataFrames[5])
+x <- unlist(list_of_dataFrames[4])
+x1 <- unlist(list_of_dataFrames[3])
+x2 <- unlist(list_of_dataFrames[2])
+x3 <- unlist(list_of_dataFrames[1])
+
+pop_grow_model <- lm(x ~ time)
+life_exp_model <- lm(x1 ~ time)
+drt_model <- lm(x2 ~ time)
+brt_model <- lm(x3 ~ time)
+when <- c(2019,2021,2022,2023,2024,2026,2027,2028,2029,2031,2032,2033,2034,2036,2037,2038,2039,2041,2042,2043,2044,2046,2047,2048,2049)
+temp_y <- y[0:59]
+temp_x <- x[0:59]
+temp_x1 <- x1[0:59]
+temp_x2 <- x2[0:59]
+temp_x3 <- x3[0:59]
+
+pgm_pred <- get_predictions(when, pop_grow_model)
+lem_pred <- get_predictions(when, life_exp_model)
+drtm_pred <- get_predictions(when, drt_model)
+brtm_pred <- get_predictions(when, brt_model)
+
+added = temp_x+temp_x1+temp_x2+temp_x3-1
+population_fit <- lm(log(temp_y) ~ added)
+summary(population_fit)
+confint(population_fit)
+qplot(time[0:59], temp_y, geom='line', main='Population - strict data, until 2020[NON-PREDICTED NUMBERS]', xlab='Total Population', ylab='Time', col='violet')
+
+added_pred <- pgm_pred + lem_pred + drtm_pred + brtm_pred
+newTime = data.frame(added = added_pred)
+pop_pred <- predict(population_fit, newdata=newTime)
+
+get_y <- get_world_data(totpop,6)
+wanted_y <- get_y[c(60,62,63,64,65,67,68,69,70,72,73,74,75,77,78,79,80,82,83,84,85,87,88,89,90)]
+
+plot(x=unlist(when), y=exp(pop_pred), type='l', main='Population prediction (2020-2050)', col='red', xlab = '', ylab='',col.axis='white');par(new=TRUE)
+plot(x=unlist(when), y=unlist(wanted_y), type='p', xlab='Total Population, predicted with model', ylab='Time', col='maroon')
+
+# reset y
+y <- unlist(list_of_dataFrames[5])
+```
+
+Above we see that, when modeled, if we wanted to predict longer into the future we would see an "exponential looking" increase in population, which makes sense because we have no extra predictor feature that tells our model that earth has a carrying capacity or any kind of restriction with food.
+
+```{r fig.align="center"}
+# Redefine variables
+food <- get_food_sum(foodData, 0)
+feed <- get_food_sum(foodData, 1)
+both <- get_food_sum(foodData, 2)
+food_drop <- c(1,2,3,4,5,6,7,8,9,10)
+food_time <- get_all_time(foodData, food_drop)
+
+lm_food_fit <- lm(food ~ food_time)
+summary(lm_food_fit)
+confint(lm_food_fit)
+log_food_fit <- lm(log(food) ~ food_time)
+summary(log_food_fit)
+confint(log_food_fit)
+qplot(food_time, food, geom='line', main='Raw data of Food data graphed along time(1961-2013)')
+
+
+newTime = data.frame(food_time = c(2014,2015,2016,2017,2018,2019,2020,2025,2030,2035,2040,2045,2050,2055,2060,2065,2070,2075,2080,2085,2090,2095,2100))
+lm_pred <- predict(lm_food_fit, newdata=newTime)
+log_pred <- predict(log_food_fit, newdata=newTime)
+
+## This will be important later
+predicted_food <- data.frame(values=exp(log_pred), years=c(2014,2015,2016,2017,2018,2019,2020,2025,2030,2035,2040,2045,2050,2055,2060,2065,2070,2075,2080,2085,2090,2095,2100))
+
+qplot(unlist(newTime), lm_pred, geom='point', main='Linear Model fit - strict population data')
+qplot(unlist(newTime), exp(log_pred), geom='point', main='Linear Model fit - log of population data | values exponentiated for viewing')
+```
+
+The predictions made above have no idea that there are restrictions to agriculture and therefore they are standardized predictions. I believe the more interesting prediction will come when modeling population to food. This will show the food needed to keep the population going.
+
+### Explained
+
+The above graphs show the population models, the first two graphs plotted, and then the food production models which are the following three graphs. I started with displaying the data that I know to be correct for the Total Population, from 1960-2020. I then made an exponential model that uses the features BirthRate, DeathRate, Life Expectancy, and Population percentage to get the Total Population and I graph it along with the already predicted data, that came with the CSV file, and they match extremely well. Oddly well, which makes me think that the predicted values of the total population may just be a prediction from a linear model.
+
+When I moved on to the following graph I thought why predict the food data for a short amount of time (2014-2050) when I could predict it all the way through 2100. The food models are independent from population, their dependent on time. The year predicts the amount of food produced, and this is a pretty accurate model from the summary given. I was conflicted on what model to fit the data too, and that is why there are two separate models. A linear model and an exponential model that uses the log, then exponentiates the prediction to get the actual value.
+
+```{r fig.align="center"}
+plot(x=food_time,y=food, type="l", xlim = c(1955,2055), ylim = c(0, 50000000), lwd=3, col="Red", xlab='', ylab='',col.axis='white');par(new=TRUE)
+plot(time,unlist(y), type="l", lwd=3, xlim = c(1955,2055), ylim = c(0, 11000000000), ylab="TotalPop(blue) | Food(red)", xlab="Time", col='blue')
+```
+Y-axis limits are different, 
+
+just to show comparison. The actual size of population compared to food is:
+```{r, echo=FALSE}
+cat('1 :',y[50]/food[50])
+```
+
+So for every 1,000 tonnes of food, we can feed about 750 people, this would be as of 2010. This is interesting because it's a completely independent calculation from time. If one was quick to assume the statistic, one might say that 0.750 people per ton, being independent from time, is standard for any year. Therefore further analysis isn't actually needed, because from this calculation we can say that if the population got to be 10 billion then we'd need roughly over 13 billion tonnes of food to feed these 10 billion people. This will be an interesting statistic if the models align with this hypothesis. If this is a correct assumption, then we'd be dealing with a linear correlation between population and food, which makes sense.
+
+This is not a correct assumption, though I thought it was while writing up the paper, and I came to realize by the end of the paper.
+
+Let's see if we can model the two together.
+
+```{r fig.align="center"}
+foodTime <- data.frame(food_time = c(2014:2050))
+predFood <- predict(log_food_fit, newdata=foodTime)
+newf <- list(unlist(food), exp(predFood))
+
+newy <- list(temp_y[1:58], wanted_y[1], temp_y[59], wanted_y[2:5], y[60], wanted_y[6:9], y[61], wanted_y[10:13], y[62], wanted_y[14:17], y[63], wanted_y[18:21], y[64], wanted_y[22:25], y[65])
+
+df <- data.frame(pop=unlist(newy), new=unlist(newf))
+fit <- lm(log(new) ~ pop, data=df)
+summary(fit)
+confint(fit)
+
+#cor(unlist(newf), unlist(newy))
+
+check <- unlist(newy)
+predPop = data.frame(pop=check[54:90])
+prediction <- predict(fit, newdata=predPop)
+
+new_predicted_food <- data.frame(values=exp(prediction), years=c(2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026,2027,2028,2029,2030,2031,2032,2033,2034,2035,2036,2037,2038,2039,2040,2041,2042,2043,2044,2045,2046,2047,2048,2049,2050))
+
+plot(x=food_time,y=food, type="l", xlim = c(1955,2055), ylim = c(0, 25000000), lwd=3, col="Purple", xlab='', ylab='',col.axis='white');par(new=TRUE)
+plot(x=c(2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026,2027,2028,2029,2030,2031,2032,2033,2034,2035,2036,2037,2038,2039,2040,2041,2042,2043,2044,2045,2046,2047,2048,2049,2050), y=exp(prediction), type="l", lwd=3, xlim = c(1955,2055), ylim = c(0, 25000000), ylab="Food(per 1,000 tonnes) dependent on population", xlab="Time", col='violet')
+```
+
+The following is the confidence interval and the predictions for Food(in tonnes) dependent on population when ran against a linear model. 
+
+    ###########  CONFINT() OF LINEAR MODEL   ####################################
+    ##                     2.5 %        97.5 %                                 ##
+    ## (Intercept) -9.203967e+06 -6.084328e+06                                 ##
+    ## pop          2.387342e-03  2.917410e-03                                 ##
+    ###########  PREDICTION OF LINEAR MODEL  ####################################
+    ##    X2014    X2015    X2016    X2017    X2018    X2020    X2025    X2030 ## 
+    ## 11596795 11821548 12047842 12272719 12492514 12920791 13945953 14904933 ## 
+    ##    X2035    X2040    X2045    X2050                                     ##
+    ## 15793622 16611851 17357301 18021642                                     ##
+    #############################################################################
+    
+```{r}
+cor(unlist(newf), unlist(newy))
+```
+    
+Also, above, I got the correlation between the food data(1961-2050), raw data with predicted food data appended(2014-2050), correlated with the original population data(1960-2050). The correlation is strong, which is what I deducted above when analyzing the graphs. The model made above was not a linear model, meaning the correlation between the two statistics is not linear. I tried through trial and error and found it wasn't worth putting the work into the RMD file, except for the above info. I then went to an exponential model and saw that it fit the data well and made sense with the actual predictions.
+
+#### Analytical Explanation
+
+To explain the data, the population data was already determined to look like some exponential-like data. This was also that case with the food production data, except if I had a more extensive knowledge of R I'd be able to try other models and see what fits better. This analysis, using the exponential model to fit the data works well enough, even with some of the population and food production data already being predicted.
+
+#### Actual Explanation
+
+A legitimate explanation could be that with an increase in food, one could say there's an increase in discarded food that's not actually consumed and therefore should be considered "noise" in the food production data due to the fact that not every bit of food is being used to feed people. This is also a huge problem, that will not be discussed in this paper. Other reasons may include: 
+
+- as the world has evolved into a more connected community world-wide, we have a fast amount of food that is available to the masses that wasn't years ago
+- the wealthier people get the more they can spend on food
+- obesity has sky-rocketed (speaking of the last 30-40 years) since the early part of the 20th century
+
+```{r}
+# 'Predicted Food productions per 1,000 tonnes for 2020-2050 based on Total Population'
+print(new_predicted_food)
+# 'Predicted Food productions per 1,000 tonnes for 2020-2050 based on Time', 
+print(predicted_food)
+```
+
+### Answering the Question
+
+Yes! We can feed 10 billion people, we would just need to be careful with how food is allocated.
+
+Above shows both food production models, in respect to time, and in respect to population and we'll need to produce 24,954,787,500 tonnes of food. If we were to assume that by 2050 there'd be 10 billion people to feed with this mean then we can just calculate how many people per ton.  $\frac{10billion}{24954787.5}=400.7247$people per 1,000 tonnes of food. In comparison to the year 2010 of people per ton of food, which is 740 people per 1,000 tonnes, the amount of people per 1,000 tonnes drops significantly. In comparison we were looking at about 13.3 billion tonnes of food hypothetically feeding 10 billion people in 2010. Now the data shows that shy of 25 billion is needed to feed 10 billion people. The former, estimate from 2010, was an under-calculation by more than 50% of the projected ladder. This is an interesting phenomenon, one worth a separate analysis.
+
+From what the model told us, we can speak about a likelihood that the data is accurate and this means that if a population of 10 billion is to survive, we need to produce, roughly, 23,491,650,000 tonnes of food. We currently produce a little under 10 billion tonnes of food, according to the actual data. Through some *light* reading, I found some articles that back the fact that we could potentially produce enough food for 10 billion people, but with consequences. This extends the purpose of this paper. Read more here, [Challenges to feeding 10 billion people](https://search.proquest.com/openview/59eb6269190cda135000ec91e9576702/1?pq-origsite=gscholar&cbl=49001). In short there are a handful of problems:
+
+- sustainable intensification – producing more from the same amount of land with fewer and less
+profound negative effects on the environment.
+- increasing the use of nitrogen fertilizer
+- feeding people equitably
+- the effect of capitalism on the farmers of the world
+- inflation of natural resources(such as food, water, non-renewable resources)
+
+$\blacksquare$
+
+
+
+## Problems With This Paper
+
+The project is a sound piece of work, with a handful of exceptions that I will clarify here. Mr. Diaz, I'll make this a quick bit of the project but I wrote it in because I am a good programmer, but R has it's quirks and sandbox (even sandbox-like) problems are no real challenge compared to an actual real-world problem like this so I hope that you are kind with grading. I also had the last couple of days to do this project because of the car data being to simple, so I hope you understand the lacking work that could have been in the project.
+
+- ```nls()``` modeling, I didn't have a strong (enough) understanding of ```nls()``` and how it's tied to exponential modeling to use it, so I stuck to the simplistic version, where you take the log of the data and convert the prediction back by exponentiation.
+- I could have extended the modeling part of the paper by looking at the predictions of population from 2050-2100 and then using that predicted population data to predict even more Food production data. **PROBLEM** : This may have been a good idea, but I amateurly modeled the population data, which would have just led to a more systematic, and exponential, increase in population and the Food production for the predicted years would have followed suite, so I decided not to include, a likely flawed, prediction.
+- Possible typo's.
+- I did not discuss any of the population data, except to discuss in a broad view of the data and I didn't explore any of the other data. An interesting part of the project could have been to talk about the Death Rate and try to re-create the predicted values that came with the data.
+- The units for the food production data is "per 1,000 tonnes", which I had been writing as "per ton" in a couple of contexts. I tried to double check my work, but I don't have fresh eyes.
+
+## References
+
+The World Bank : [Population Data](https://datacatalog.worldbank.org/dataset/population-estimates-and-projections)
+- Only used the main population data
+- Disregarded all other CSV files
+
+Kaggle : [Food Data](https://www.kaggle.com/dorbicycle/world-foodfeed-production)
